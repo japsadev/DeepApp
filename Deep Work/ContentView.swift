@@ -41,19 +41,37 @@ struct StatsView: View {
 
 struct FocusView: View {
     @State private var focusDuration: Double = 0
+    @State private var elapsedTime: TimeInterval = 0
     @State private var isTimerRunning = false
     @State private var showingTagSelection = false
     @State private var selectedTag: Tag?
     @State private var tags: [Tag] = [Tag(name: "Deep Work", emoji: "🎯", color: .blue)]
+    @State private var isTimerMode = true
+    @State private var timer: Timer?
+    @State private var showSlider = true
 
     var body: some View {
         VStack(spacing: 20) {
+            HStack {
+                Picker("Mode", selection: $isTimerMode) {
+                    Image(systemName: "timer").tag(true)
+                    Image(systemName: "stopwatch").tag(false)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .frame(width: 100)
+                .onChange(of: isTimerMode) { _ in
+                    resetTimer()
+                }
+            }
+            .padding()
+
             CircularSliderView(
                 value: $focusDuration,
                 inRange: 0...180,
                 step: 5,
                 sliderColor: selectedTag?.color ?? .blue,
-                emoji: selectedTag?.emoji ?? "🎯"
+                emoji: selectedTag?.emoji ?? "🎯",
+                showSlider: showSlider && isTimerMode
             )
             .frame(width: 300, height: 300)
 
@@ -65,28 +83,46 @@ struct FocusView: View {
                         .font(.title2)
                     Text(selectedTag?.name ?? "Deep Work")
                         .foregroundColor(selectedTag?.color ?? .blue)
-//                    Spacer()
+                    Spacer()
                     Image(systemName: "chevron.right")
-                        .foregroundColor(selectedTag?.color)
+                        .foregroundColor(.gray)
                 }
                 .padding()
                 .background(Color.gray.opacity(0.1))
-                .cornerRadius(100)
+                .cornerRadius(10)
             }
             .padding(.horizontal)
 
-            Text(timeString(from: Int(focusDuration * 60)))
+            Text(timeString(from: isTimerMode ? Int(focusDuration * 60 - elapsedTime) : Int(elapsedTime)))
                 .font(.title)
                 .bold()
 
-            Button(action: {
-                self.isTimerRunning.toggle()
-            }) {
-                Text(isTimerRunning ? "Pause Focus" : "Start Focus")
-                    .padding()
-                    .background(selectedTag?.color ?? .blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+            HStack(spacing: 20) {
+                Button(action: {
+                    if isTimerRunning {
+                        pauseTimer()
+                    } else {
+                        startTimer()
+                    }
+                }) {
+                    Text(isTimerRunning ? "Pause" : "Start")
+                        .padding()
+                        .background(selectedTag?.color ?? .blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+
+                if isTimerRunning || elapsedTime > 0 {
+                    Button(action: {
+                        stopTimer()
+                    }) {
+                        Text("Stop")
+                            .padding()
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                }
             }
         }
         .padding()
@@ -96,9 +132,42 @@ struct FocusView: View {
     }
 
     func timeString(from seconds: Int) -> String {
-        let minutes = seconds / 60
-        let remainingSeconds = seconds % 60
+        let minutes = abs(seconds) / 60
+        let remainingSeconds = abs(seconds) % 60
         return String(format: "%02d:%02d", minutes, remainingSeconds)
+    }
+
+    func startTimer() {
+        isTimerRunning = true
+        showSlider = false
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            if isTimerMode {
+                if elapsedTime < focusDuration * 60 {
+                    elapsedTime += 1
+                } else {
+                    stopTimer()
+                }
+            } else {
+                elapsedTime += 1
+            }
+        }
+    }
+
+    func pauseTimer() {
+        isTimerRunning = false
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func stopTimer() {
+        pauseTimer()
+        elapsedTime = 0
+        showSlider = true
+    }
+
+    func resetTimer() {
+        stopTimer()
+        focusDuration = 0
     }
 }
 
@@ -114,14 +183,7 @@ struct CircularSliderView: View {
     let step: Double
     let sliderColor: Color
     let emoji: String
-
-    init(value: Binding<Double>, inRange range: ClosedRange<Int>, step: Double, sliderColor: Color, emoji: String) {
-        self._value = value
-        self.inRange = Double(range.lowerBound)...Double(range.upperBound)
-        self.step = step
-        self.sliderColor = sliderColor
-        self.emoji = emoji
-    }
+    let showSlider: Bool
 
     private var progressFraction: Double {
         (value - inRange.lowerBound) / (inRange.upperBound - inRange.lowerBound)
@@ -132,21 +194,23 @@ struct CircularSliderView: View {
             ZStack {
                 Circle()
                     .stroke(sliderColor.opacity(0.3), lineWidth: 20)
-                Circle()
-                    .trim(from: 0, to: CGFloat(progressFraction))
-                    .stroke(sliderColor, style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                
-                // Knob
-                Circle()
-                    .fill(sliderColor)
-                    .frame(width: 30, height: 30)
-                    .shadow(radius: 4)
-                    .offset(x: geometry.size.width / 2 * cos(2 * .pi * progressFraction - .pi / 2),
-                            y: geometry.size.width / 2 * sin(2 * .pi * progressFraction - .pi / 2))
+                if showSlider {
+                    Circle()
+                        .trim(from: 0, to: CGFloat(progressFraction))
+                        .stroke(sliderColor, style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    
+                    // Knob
+                    Circle()
+                        .fill(sliderColor)
+                        .frame(width: 30, height: 30)
+                        .shadow(radius: 4)
+                        .offset(x: geometry.size.width / 2 * cos(2 * .pi * progressFraction - .pi / 2),
+                                y: geometry.size.width / 2 * sin(2 * .pi * progressFraction - .pi / 2))
+                }
                 
                 Text(emoji)
-                    .font(.system(size: 100))
+                    .font(.system(size: 50))
                 
                 // Gesture area
                 Circle()
@@ -155,7 +219,9 @@ struct CircularSliderView: View {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { dragValue in
-                                updateProgress(dragValue: dragValue, in: geometry.size)
+                                if showSlider {
+                                    updateProgress(dragValue: dragValue, in: geometry.size)
+                                }
                             }
                     )
             }
