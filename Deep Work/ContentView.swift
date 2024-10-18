@@ -7,6 +7,13 @@
 
 import SwiftUI
 
+struct Session: Identifiable, Codable {
+    let id = UUID()
+    let duration: TimeInterval
+    let tagName: String
+    let date: Date
+}
+
 struct ContentView: View {
     @State private var selectedTab = 1 // Başlangıçta Focus tab'ını seçili yapar
 
@@ -34,8 +41,44 @@ struct ContentView: View {
 }
 
 struct StatsView: View {
+    @State private var sessions: [Session] = []
+
     var body: some View {
-        Text("Stats View")
+        NavigationView {
+            List {
+                ForEach(sessions) { session in
+                    VStack(alignment: .leading) {
+                        Text(session.tagName)
+                            .font(.headline)
+                        Text("Duration: \(formatDuration(session.duration))")
+                        Text("Date: \(formatDate(session.date))")
+                    }
+                }
+            }
+            .navigationTitle("Stats")
+            .onAppear(perform: loadSessions)
+        }
+    }
+
+    func loadSessions() {
+        if let savedSessions = UserDefaults.standard.data(forKey: "savedSessions"),
+           let decodedSessions = try? JSONDecoder().decode([Session].self, from: savedSessions) {
+            sessions = decodedSessions
+        }
+    }
+
+    func formatDuration(_ duration: TimeInterval) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute, .second]
+        formatter.unitsStyle = .abbreviated
+        return formatter.string(from: duration) ?? ""
+    }
+
+    func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 
@@ -49,6 +92,7 @@ struct FocusView: View {
     @State private var isTimerMode = true
     @State private var timer: Timer?
     @State private var showSlider = true
+    @State private var sessions: [Session] = []
 
     var body: some View {
         VStack(spacing: 20) {
@@ -83,7 +127,6 @@ struct FocusView: View {
                         .font(.title2)
                     Text(selectedTag?.name ?? "Deep Work")
                         .foregroundColor(selectedTag?.color ?? .blue)
-//                    Spacer()
                     Image(systemName: "chevron.right")
                         .foregroundColor(.gray)
                 }
@@ -129,6 +172,7 @@ struct FocusView: View {
         .sheet(isPresented: $showingTagSelection) {
             SelectTagView(tags: $tags, selectedTag: $selectedTag)
         }
+        .onAppear(perform: loadSessions)
     }
 
     func timeString(from seconds: Int) -> String {
@@ -161,6 +205,11 @@ struct FocusView: View {
 
     func stopTimer() {
         pauseTimer()
+        if elapsedTime > 0 {
+            let newSession = Session(duration: elapsedTime, tagName: selectedTag?.name ?? "Deep Work", date: Date())
+            sessions.append(newSession)
+            saveSessions()
+        }
         elapsedTime = 0
         showSlider = true
     }
@@ -168,6 +217,19 @@ struct FocusView: View {
     func resetTimer() {
         stopTimer()
         focusDuration = 0
+    }
+
+    func saveSessions() {
+        if let encoded = try? JSONEncoder().encode(sessions) {
+            UserDefaults.standard.set(encoded, forKey: "savedSessions")
+        }
+    }
+
+    func loadSessions() {
+        if let savedSessions = UserDefaults.standard.data(forKey: "savedSessions"),
+           let decodedSessions = try? JSONDecoder().decode([Session].self, from: savedSessions) {
+            sessions = decodedSessions
+        }
     }
 }
 
@@ -192,7 +254,6 @@ struct CircularSliderView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Gesture area
                 gestureArea(in: geometry)
                 
                 if showSlider {
@@ -201,7 +262,6 @@ struct CircularSliderView: View {
                     sliderKnob(in: geometry)
                 }
                 
-                // Emoji
                 Text(emoji)
                     .font(.system(size: 100))
             }
@@ -378,7 +438,6 @@ struct EditTagView: View {
                         tags[index].emoji = tagEmoji
                         tags[index].color = tagColor
                         
-                        // Update selectedTag if it was the edited tag
                         if selectedTag?.id == tagToEdit.id {
                             selectedTag = tags[index]
                         }
