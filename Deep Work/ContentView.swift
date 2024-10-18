@@ -59,11 +59,11 @@ struct FocusView: View {
                 }
                 .pickerStyle(SegmentedPickerStyle())
                 .frame(width: 100)
-                .onChange(of: isTimerMode) { _ in
+                .onChange(of: isTimerMode) { _, _ in
                     resetTimer()
                 }
             }
-            .padding()
+            .padding(.vertical,50)
 
             CircularSliderView(
                 value: $focusDuration,
@@ -83,15 +83,15 @@ struct FocusView: View {
                         .font(.title2)
                     Text(selectedTag?.name ?? "Deep Work")
                         .foregroundColor(selectedTag?.color ?? .blue)
-                    Spacer()
+//                    Spacer()
                     Image(systemName: "chevron.right")
                         .foregroundColor(.gray)
                 }
                 .padding()
                 .background(Color.gray.opacity(0.1))
-                .cornerRadius(10)
+                .cornerRadius(100)
             }
-            .padding(.horizontal)
+            .padding()
 
             Text(timeString(from: isTimerMode ? Int(focusDuration * 60 - elapsedTime) : Int(elapsedTime)))
                 .font(.title)
@@ -192,41 +192,62 @@ struct CircularSliderView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Circle()
-                    .stroke(sliderColor.opacity(0.3), lineWidth: 20)
+                // Gesture area
+                gestureArea(in: geometry)
+                
                 if showSlider {
-                    Circle()
-                        .trim(from: 0, to: CGFloat(progressFraction))
-                        .stroke(sliderColor, style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    
-                    // Knob
-                    Circle()
-                        .fill(sliderColor)
-                        .frame(width: 30, height: 30)
-                        .shadow(radius: 4)
-                        .offset(x: geometry.size.width / 2 * cos(2 * .pi * progressFraction - .pi / 2),
-                                y: geometry.size.width / 2 * sin(2 * .pi * progressFraction - .pi / 2))
+                    sliderCircle()
+                    progressArc()
+                    sliderKnob(in: geometry)
                 }
                 
+                // Emoji
                 Text(emoji)
-                    .font(.system(size: 50))
-                
-                // Gesture area
-                Circle()
-                    .fill(Color.clear)
-                    .contentShape(Circle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { dragValue in
-                                if showSlider {
-                                    updateProgress(dragValue: dragValue, in: geometry.size)
-                                }
-                            }
-                    )
+                    .font(.system(size: 100))
             }
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+    
+    private func gestureArea(in geometry: GeometryProxy) -> some View {
+        Circle()
+            .fill(sliderColor.gradient.opacity(0.3))
+            .frame(width: showSlider ? geometry.size.width - 20 : geometry.size.width,
+                   height: showSlider ? geometry.size.height - 20 : geometry.size.height)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { dragValue in
+                        if showSlider {
+                            updateProgress(dragValue: dragValue, in: geometry.size)
+                        }
+                    }
+            )
+    }
+    
+    private func sliderCircle() -> some View {
+        Circle()
+            .stroke(sliderColor.opacity(0.3), lineWidth: 20)
+    }
+    
+    private func progressArc() -> some View {
+        Circle()
+            .trim(from: 0, to: CGFloat(progressFraction))
+            .stroke(sliderColor, style: StrokeStyle(lineWidth: 20, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+    }
+    
+    private func sliderKnob(in geometry: GeometryProxy) -> some View {
+        let radius = geometry.size.width / 2
+        let angle = 2 * .pi * progressFraction - .pi / 2
+        let xOffset = radius * cos(angle)
+        let yOffset = radius * sin(angle)
+        
+        return Circle()
+            .fill(sliderColor)
+            .frame(width: 30, height: 30)
+            .shadow(radius: 4)
+            .offset(x: xOffset, y: yOffset)
     }
 
     private func updateProgress(dragValue: DragGesture.Value, in size: CGSize) {
