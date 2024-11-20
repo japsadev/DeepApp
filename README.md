@@ -1,3 +1,4 @@
 # Deep
 
- Privacy Policy: [DeepAppPrivacyPolicy.md]().
+ ### Privacy Policy: [DeepAppPrivacyPolicy.html]()
+ ### Terms Conditions: [DeepAppTermsConditions.html]()
